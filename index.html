@@ -37,35 +37,41 @@
   </div>
 
 <script>
-/*
-  Lista de dominios a probar: cámbiala por tus dominios.
-  Asegúrate de incluir el esquema: "https://" o "http://".
-*/
 const domains = [
   "https://4ksmart.me/",
   "https://cf.cdn-959.me/"
 ];
 
-const TIMEOUT_MS = 7000; // tiempo máximo por petición
+const TIMEOUT_MS = 7000;
 
 function testDomain(url) {
   return new Promise((resolve) => {
     const controller = new AbortController();
-    const timer = setTimeout(()=> {
-      controller.abort();
-    }, TIMEOUT_MS);
+    const timer = setTimeout(()=>controller.abort(), TIMEOUT_MS);
 
-    // mode:"no-cors" -> si responde, fetch resuelve aunque la respuesta sea "opaca".
-    fetch(url, {method: "GET", mode: "no-cors", cache: "no-store", signal: controller.signal})
-      .then(() => {
+    fetch(url, { method:"GET", mode:"cors", signal:controller.signal })
+      .then(resp => {
         clearTimeout(timer);
-        // Si fetch resolvió, consideramos el dominio accesible desde la conexión del cliente.
-        resolve({url, ok: true});
+        if (resp.status === 401) {
+          resolve({url, status: resp.status, result:"Disponible (requiere login)", class:"warn"});
+        } else if (resp.status === 403) {
+          resolve({url, status: resp.status, result:"Bloqueado (403)", class:"blocked"});
+        } else if (resp.ok) {
+          resolve({url, status: resp.status, result:"Disponible", class:"ok"});
+        } else {
+          resolve({url, status: resp.status, result:"Respondió con error "+resp.status, class:"warn"});
+        }
       })
-      .catch((err) => {
+      .catch(err => {
         clearTimeout(timer);
-        // Si hubo error (abort, DNS, network), consideramos bloqueado/no responde.
-        resolve({url, ok: false, error: err && err.name ? err.name : String(err)});
+        // Si es un error de CORS, eso quiere decir que el dominio contestó
+        if (err.name === "TypeError") {
+          resolve({url, status:"-", result:"Disponible (CORS bloqueado)", class:"ok"});
+        } else if (err.name === "AbortError") {
+          resolve({url, status:"-", result:"Timeout / No responde", class:"blocked"});
+        } else {
+          resolve({url, status:"-", result:"No accesible ("+err.name+")", class:"blocked"});
+        }
       });
   });
 }
@@ -77,18 +83,12 @@ async function runChecks() {
   btn.disabled = true;
   btn.textContent = 'Comprobando...';
 
-  // Lanzamos todas las comprobaciones en paralelo
   const checks = domains.map(d => testDomain(d));
   const results = await Promise.all(checks);
 
-  // Mostrar resultados (manteniendo orden original)
-  results.forEach((r, i) => {
+  results.forEach((r,i) => {
     const tr = document.createElement('tr');
-    if (r.ok) {
-      tr.innerHTML = `<td>${i+1}</td><td>${r.url}</td><td class="ok">Disponible</td>`;
-    } else {
-      tr.innerHTML = `<td>${i+1}</td><td>${r.url}</td><td class="blocked">Bloqueado o no responde <small>(${r.error||'timeout'})</small></td>`;
-    }
+    tr.innerHTML = `<td>${i+1}</td><td>${r.url}</td><td class="${r.class}">${r.result}</td>`;
     tbody.appendChild(tr);
   });
 
@@ -98,5 +98,7 @@ async function runChecks() {
 
 document.getElementById('checkBtn').addEventListener('click', runChecks);
 </script>
+
 </body>
 </html>
+
