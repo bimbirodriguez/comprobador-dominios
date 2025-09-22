@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Comprobador de dominios</title>
 <style>
-  body{font-family:Arial, sans-serif; background:#f8fafc; color:#0f172a; padding:20px;}
+  body{font-family:Arial,sans-serif; background:#f8fafc; color:#0f172a; padding:20px;}
   .card{max-width:900px;margin:0 auto;background:#fff;border-radius:10px;padding:20px;box-shadow:0 6px 18px rgba(0,0,0,0.1);}
   h1{margin:0 0 10px;font-size:22px}
   button{background:#0ea5a4;color:#fff;border:0;padding:10px 16px;border-radius:8px;cursor:pointer;margin-bottom:15px}
@@ -15,13 +15,12 @@
   th{background:#f1f5f9}
   .ok{color:green;font-weight:bold}
   .blocked{color:#dc2626;font-weight:bold}
-  .warn{color:#b45309;font-weight:bold}
 </style>
 </head>
 <body>
   <div class="card">
     <h1>Comprobador de dominios</h1>
-    <p>Haz clic en <b>Comprobar</b> para saber si los dominios responden desde tu conexión.</p>
+    <p>Haz clic en <b>Comprobar</b> para saber qué dominios responden desde tu conexión.</p>
     <button id="checkBtn">Comprobar</button>
     <table>
       <thead>
@@ -32,7 +31,6 @@
   </div>
 
 <script>
-// Lista de dominios a comprobar
 const domains = [
   "http://cf.cdn-959.me",
   "http://cf.cdn-010.me",
@@ -53,13 +51,37 @@ const domains = [
 ];
 
 async function checkDomain(url) {
-  try {
-    const res = await fetch(`/api/check?url=${encodeURIComponent(url)}`);
-    const data = await res.json();
-    return { url, ...data };
-  } catch (err) {
-    return { url, status: "-", result: "Error al comprobar", class:"blocked" };
-  }
+  return new Promise(resolve => {
+    const img = new Image();
+    let done = false;
+
+    // Timeout por si no responde
+    const timer = setTimeout(() => {
+      if (!done) {
+        done = true;
+        resolve({url, result: "No responde / Bloqueado", class:"blocked"});
+      }
+    }, 7000);
+
+    img.onload = () => {
+      if (!done) {
+        done = true;
+        clearTimeout(timer);
+        resolve({url, result:"Disponible", class:"ok"});
+      }
+    };
+
+    img.onerror = () => {
+      if (!done) {
+        done = true;
+        clearTimeout(timer);
+        resolve({url, result:"Bloqueado o no responde", class:"blocked"});
+      }
+    };
+
+    // Intentar cargar la URL como imagen
+    img.src = url + "/favicon.ico?" + Date.now(); // Evita caché
+  });
 }
 
 async function runChecks() {
@@ -73,7 +95,7 @@ async function runChecks() {
 
   results.forEach((r,i) => {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${i+1}</td><td>${r.url}</td><td class="${r.class}">${r.result} ${r.status ? "(" + r.status + ")" : ""}</td>`;
+    tr.innerHTML = `<td>${i+1}</td><td>${r.url}</td><td class="${r.class}">${r.result}</td>`;
     tbody.appendChild(tr);
   });
 
